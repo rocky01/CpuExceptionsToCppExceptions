@@ -4,7 +4,7 @@
 
 struct SigSeg {};
 typedef void (*handler)();
-void init_segv(handler h);
+void init_segv(handler h, bool record_core_dumps);
 
 
 #endif // _SIG_SEG_H

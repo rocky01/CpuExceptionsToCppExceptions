@@ -1,18 +1,19 @@
 #include "sigSeg.h"
 
 #include <signal.h>
+#include <stdlib.h> 
 #include <unistd.h>
 #include <sys/syscall.h>
 
-
-//using namespace std;
 
 namespace
 {
 
 handler handler_segv = 0;
+bool record_core_dumps_ = false;
+struct sigaction old_sa;
 
-static void unblock_signal(int signum __attribute__((__unused__)))
+static void unblock_signal(int signum)
 {
     sigset_t sigs;
     sigemptyset(&sigs);
@@ -20,42 +21,33 @@ static void unblock_signal(int signum __attribute__((__unused__)))
     sigprocmask(SIG_UNBLOCK, &sigs, NULL);
 }
 
-static void catch_segv (int, siginfo_t *, void *_p __attribute__ ((__unused__)))
+static void catch_segv (int, siginfo_t *, void *)
 {
-    unblock_signal(SIGSEGV);
-    handler_segv();
+    if ((!record_core_dumps_) || fork() > 0)
+    {
+      unblock_signal(SIGSEGV);
+      handler_segv();
+    }			
+    else 
+    {	
+       if (sigaction(SIGSEGV, &old_sa, NULL) == -1)
+          abort();	
+    }
 }
 
-extern "C" 
-{
-  struct kernel_sigaction 
-  {
-    void (*k_sa_sigaction)(int,siginfo_t *,void *);
-    unsigned long k_sa_flags;
-    void (*k_sa_restorer) (void);
-    sigset_t k_sa_mask;
-  };
-}
+} // namespace
 
-asm ( ".text\n" 
-      ".byte 0  # Yes, this really is necessary\n" 
-      ".align 16\n" "__" "restore_rt" ":\n" 
-      "	movq $" "15" ", %rax  # Because __NR_rt_sigreturn = 15\n" 
-      "	syscall\n" );
-
-void restore_rt (void) asm ("__restore_rt") __attribute__ ((visibility ("hidden")));
-}
-
-void init_segv(handler h)
+void init_segv(handler h, bool record_core_dumps)
 {
     if (h)
+    {
+        record_core_dumps_ = record_core_dumps;
         handler_segv = h;
-							
-    struct kernel_sigaction act;				
-    act.k_sa_sigaction = catch_segv;			
-    sigemptyset (&act.k_sa_mask);				
-    act.k_sa_flags = SA_SIGINFO|0x4000000;			
-    act.k_sa_restorer = restore_rt;				
-    syscall (SYS_rt_sigaction, SIGSEGV, &act, NULL, _NSIG / 8);	
+        struct sigaction sa;
+        sa.sa_sigaction = catch_segv;
+        sa.sa_flags = SA_SIGINFO|0x4000000;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGSEGV, &sa, &old_sa) == -1)
+            abort();
+    }
 }
-
