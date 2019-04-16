@@ -3,16 +3,17 @@
 
 #include "sigSeg.h"
 
+struct SigSeg {};
 
-void handle_segv()
+void handle_segv(int)
 {
     throw SigSeg();
 }
 
 int main()
 {
-    init_segv(&handle_segv, false);
-    
+    init_segv(&handle_segv, true);
+
     try
     {
         std::cout << "In try." << std::endl;

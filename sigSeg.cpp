@@ -1,15 +1,13 @@
 #include "sigSeg.h"
 
 #include <signal.h>
-#include <stdlib.h> 
+#include <stdlib.h>
 #include <unistd.h>
-#include <sys/syscall.h>
-
 
 namespace
 {
 
-handler handler_segv = 0;
+sighandler_t handler_segv = 0;
 bool record_core_dumps_ = false;
 struct sigaction old_sa;
 
@@ -21,23 +19,23 @@ static void unblock_signal(int signum)
     sigprocmask(SIG_UNBLOCK, &sigs, NULL);
 }
 
-static void catch_segv (int, siginfo_t *, void *)
+static void catch_segv (int sig, siginfo_t *, void *)
 {
     if ((!record_core_dumps_) || fork() > 0)
     {
       unblock_signal(SIGSEGV);
-      handler_segv();
-    }			
-    else 
-    {	
+      handler_segv(sig);
+    }
+    else
+    {
        if (sigaction(SIGSEGV, &old_sa, NULL) == -1)
-          abort();	
+          abort();
     }
 }
 
 } // namespace
 
-void init_segv(handler h, bool record_core_dumps)
+void init_segv(sighandler_t h, bool record_core_dumps)
 {
     if (h)
     {
